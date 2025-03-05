@@ -4,8 +4,8 @@
 
 `"I'd rather have a search engine or a compiler on a deserted island than a game." -- John Carmack (CTO of Oculus VR)`
 
-Assigned on: Wednesday March 13th  
-**Due: Monday April 15th**
+Assigned on: Wednesday March 12th  
+**Due: Wednesday April 9th**
 
 Total marks = 16/100    
 (-2 marks per day late)
