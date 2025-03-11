@@ -35,7 +35,7 @@ For each of those primitives, there is a functionality test that will run to ens
 
 You are expected to perform at least three distinct optimizations for each operation, but you are encouraged to do more. There are plenty of examples on the TVM website to guide you on the _kind_ of optimizations that work on each device. For example, this [GEMM on CPU optimization](https://tvm.apache.org/docs/tutorial/tensor_expr_get_started.html#example-2-manually-optimizing-matrix-multiplication-with-te) showcases 6 distinct optimizations. It will be very useful for you to walk through these optimizations and understand them before diving into your solution for the questions above. Other useful examples include this [2D Conv Optimization on GPU](https://tvm.apache.org/docs/how_to/optimize_operators/opt_conv_cuda.html?highlight=gpu%20conv%20optimization).
 
-You will use TVM's [schedule primitives](https://tvm.apache.org/docs/how_to/work_with_schedules/schedule_primitives.html) to perform the optimizations. You are not allowed to use AutoTVM, although you may do so for comparison [1 mark extra credit].
+You will use TVM's [schedule primitives](https://tvm.apache.org/docs/v0.10.0/how_to/work_with_schedules/schedule_primitives.html) to perform the optimizations. You are not allowed to use AutoTVM, although you may do so for comparison [1 mark extra credit].
 
 In your code submission, make sure to include all of your optimizations, ideally, organized into different functions. 
 
