@@ -29,6 +29,8 @@ You will optimize the following primitives:
 1. GEMM on GPU^.
 1. 2D Depthwise Separable Convolution on GPU.
 
+#### [Bonus] `3-conv1d_fpga.ipynb`, `src/ops_fpga.py`, `tests/test_1dconv_fpga.py` files are intended to implement the operations on an FPGA. However, that part is not required and will not work out of the box. If you submit a working version of it, you get 1 Bonus mark.
+
 ^ _A Baseline implementation is provided for the 1D convolution on the CPU, and GEMM on GPU; you are required to optimize these implementations. For other problems, you are required to write the baseline implementation **and** optimize them._
 
 For each of those primitives, there is a functionality test that will run to ensure that your optimized code is still functional. Additionally, we will benchmark all submissions to find the fastest solution. Higher marks will be awarded to faster solutions!
