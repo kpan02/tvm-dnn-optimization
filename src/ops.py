@@ -22,6 +22,57 @@ def make_conv1d_cpu_scheduler(M, N):
     return s, A, W, B
 
 
+def make_conv1d_cpu_scheduler_func(M, N):
+    A = te.placeholder((M,), name="A")
+    W = te.placeholder((N,), name="W")
+
+    k = te.reduce_axis((0, N), "k")
+    B = te.compute(
+        (M + N - 1,),
+        lambda i: te.sum(
+            tvm.tir.if_then_else(
+                tvm.tir.any(i - k < 0, i - k >= M),
+                tvm.tir.const(0.0, "float32"),
+                A[i - k] * W[k]
+            ),
+            axis=k
+        ),
+        name="B"
+    )
+
+    s = te.create_schedule(B.op)
+
+    # Optimization 1: Loop splitting
+    s, inner_axis, outer_axis = conv1d_cpu_optim1(s, B)
+    
+    # Optimization 2: Vectorization
+    s = conv1d_cpu_optim2(s, B, inner_axis)
+
+    # Optimization 3: Parallel execution
+    s = conv1d_cpu_optim3(s, B, outer_axis)
+
+    return s, A, W, B
+
+
+def conv1d_cpu_optim1(s, B):
+    # Optimization 1: Loop splitting
+    split_factor = 32
+    i, = s[B].op.axis
+    io, ii = s[B].split(i, factor=split_factor)
+    s[B].reorder(io, ii)
+    return s, ii, io  
+
+def conv1d_cpu_optim2(s, B, inner_axis):
+    # Optimization 2: Vectorization
+    s[B].vectorize(inner_axis)
+    return s
+
+def conv1d_cpu_optim3(s, B, outer_axis):
+    # Optimization 3: Parallel execution
+    s[B].parallel(outer_axis)
+    return s
+
+
 def make_conv1d_gpu_scheduler(M, N):
     A = te.placeholder((M,), name="A")
     W = te.placeholder((N,), name="W")
