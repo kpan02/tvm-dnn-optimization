@@ -115,13 +115,13 @@ def make_gemm_gpu_scheduler(M, K, N):
     # Default schedule
     s = te.create_schedule(C.op)
     
-    # Apply optimization 1: Tiling
+    # Optimization 1: Tiling
     s, *block_axes = gemm_gpu_optim1(s, C, A, B)
     
-    # Apply optimization 2: Shared Memory
+    # Optimization 2: Shared Memory
     s = gemm_gpu_optim2(s, C, A, B, block_axes)
     
-    # Apply optimization 3: Vectorization
+    # Optimization 3: Vectorization
     s = gemm_gpu_optim3(s, C, A, B, block_axes)
     
     return s, A, B, C
