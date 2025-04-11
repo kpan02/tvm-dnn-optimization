@@ -7,25 +7,6 @@ def make_conv1d_cpu_scheduler(M, N):
     A = te.placeholder((M,), name="A")
     W = te.placeholder((N,), name="W")
 
-    k = te.reduce_axis((0, M + N - 1), "k")
-    B = te.compute(
-        (M + N - 1,),
-        lambda n: te.sum(tvm.tir.if_then_else(
-            tvm.tir.any(k < 0, k >= M, n - k < 0, n - k >= N),
-            tvm.tir.const(0.0, "float32"),
-            A[k] * W[n - k]), axis=k),
-        name="B",
-    )
-
-    s = te.create_schedule(B.op)
-
-    return s, A, W, B
-
-
-def make_conv1d_cpu_scheduler_func(M, N):
-    A = te.placeholder((M,), name="A")
-    W = te.placeholder((N,), name="W")
-
     k = te.reduce_axis((0, N), "k")
     B = te.compute(
         (M + N - 1,),
@@ -77,12 +58,52 @@ def make_conv1d_gpu_scheduler(M, N):
     A = te.placeholder((M,), name="A")
     W = te.placeholder((N,), name="W")
 
-    # TODO: fill-in start
-    B = None
-    s = None
-    # TODO: fill-in end
+    k = te.reduce_axis((0, N), "k")
+    B = te.compute(
+        (M + N - 1,),
+        lambda i: te.sum(
+            tvm.tir.if_then_else(
+                tvm.tir.any(i - k < 0, i - k >= M),
+                tvm.tir.const(0.0, "float32"),
+                A[i - k] * W[k]
+            ),
+            axis=k
+        ),
+        name="B"
+    )
+
+    s = te.create_schedule(B.op)
+    k_axis = s[B].op.reduce_axis[0]
+    
+    # Optimization 1: Basic thread binding
+    s, bx, tx = conv1d_gpu_optim1(s, B)
+
+    # Optimization 2: Reorder axes
+    s = conv1d_gpu_optim2(s, B, bx, tx, k_axis)
+
+    # Optimization 3: Auto-unroll pragma
+    s = conv1d_gpu_optim3(s, B, tx)
 
     return s, A, W, B
+
+
+def conv1d_gpu_optim1(s, B):
+    # Optimization 1: Basic thread binding
+    i, = s[B].op.axis
+    bx, tx = s[B].split(i, factor=128)
+    s[B].bind(bx, te.thread_axis("blockIdx.x"))
+    s[B].bind(tx, te.thread_axis("threadIdx.x"))
+    return s, bx, tx
+
+def conv1d_gpu_optim2(s, B, bx, tx, k):
+    # Optimization 2: Reorder axes
+    s[B].reorder(bx, tx, k)
+    return s
+
+def conv1d_gpu_optim3(s, B, tx):
+   # Optimization 3: Auto-unroll pragma
+    s[B].pragma(tx, "auto_unroll_max_step", 8)
+    return s
 
 
 def make_gemm_gpu_scheduler(M, K, N):
