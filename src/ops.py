@@ -109,29 +109,97 @@ def conv1d_gpu_optim3(s, B, tx):
 def make_gemm_gpu_scheduler(M, K, N):
     A = te.placeholder((M, K), name="A")
     B = te.placeholder((K, N), name="B")
-
-    # TVM Matrix Multiplication using TE
     k = te.reduce_axis((0, K), "k")
-    A = te.placeholder((M, K), name="A")
-    B = te.placeholder((K, N), name="B")
     C = te.compute((M, N), lambda x, y: te.sum(A[x, k] * B[k, y], axis=k), name="C")
+    
     # Default schedule
     s = te.create_schedule(C.op)
-
-    # the i-th block is indexed by blockIdx.x.
-    # the number of threads in each block is blockDim.x
-    # and the i-th thread within a block is indexed by threadIdx.x
-    # overall index of a thread can be calculated as
-    # 𝑖=blockIdx.x×blockDim.x+threadIdx.x
-    block_x = te.thread_axis("blockIdx.y")
-    block_y = te.thread_axis("blockIdx.x")
-
-    x, y = s[C].op.axis
-    (k,) = s[C].op.reduce_axis
-    s[C].bind(y, block_y)
-    s[C].bind(x, block_x)
-
+    
+    # Apply optimization 1: Tiling
+    s, *block_axes = gemm_gpu_optim1(s, C, A, B)
+    
+    # Apply optimization 2: Shared Memory
+    s = gemm_gpu_optim2(s, C, A, B, block_axes)
+    
+    # Apply optimization 3: Vectorization
+    s = gemm_gpu_optim3(s, C, A, B, block_axes)
+    
     return s, A, B, C
+
+
+def gemm_gpu_optim1(s, C, A, B):
+    # Optimization 1: Tiling
+    x, y = s[C].op.axis
+    k = s[C].op.reduce_axis[0]
+    
+    tile_x = 16
+    tile_y = 16
+    tile_k = 8
+    
+    # Tile & reorder axes
+    x_outer, x_inner = s[C].split(x, factor=tile_x)
+    y_outer, y_inner = s[C].split(y, factor=tile_y)
+    k_outer, k_inner = s[C].split(k, factor=tile_k)
+    s[C].reorder(x_outer, y_outer, k_outer, x_inner, y_inner, k_inner)
+    
+    # Map to GPU thread hierarchy
+    s[C].bind(x_outer, te.thread_axis("blockIdx.x"))
+    s[C].bind(y_outer, te.thread_axis("blockIdx.y"))
+    s[C].bind(x_inner, te.thread_axis("threadIdx.x"))
+    s[C].bind(y_inner, te.thread_axis("threadIdx.y"))
+    
+    return s, x_outer, y_outer, k_outer, x_inner, y_inner, k_inner
+
+
+def gemm_gpu_optim2(s, C, A, B, block_axes):
+    # Optimization 2: Shared Memory
+    x_outer, y_outer, k_outer, x_inner, y_inner, k_inner = block_axes
+    
+    A_shared = s.cache_read(A, "shared", [C])
+    B_shared = s.cache_read(B, "shared", [C])
+    
+    s[A_shared].compute_at(s[C], k_outer)
+    s[B_shared].compute_at(s[C], k_outer)
+    
+    aa_x, aa_y = s[A_shared].op.axis
+    aa_fused = s[A_shared].fuse(aa_x, aa_y)
+    tx, ty = s[C].op.axis
+    thread_x = te.thread_axis("threadIdx.x")
+    thread_y = te.thread_axis("threadIdx.y")
+    
+    aa_outer, aa_inner = s[A_shared].split(aa_fused, factor=16)
+    s[A_shared].bind(aa_inner, thread_x)
+    
+    bb_x, bb_y = s[B_shared].op.axis
+    bb_fused = s[B_shared].fuse(bb_x, bb_y)
+    bb_outer, bb_inner = s[B_shared].split(bb_fused, factor=16)
+    s[B_shared].bind(bb_inner, thread_x)
+    
+    return s
+
+
+def gemm_gpu_optim3(s, C, A, B, block_axes):
+    # Optimization 3: Vectorization
+    x_outer, y_outer, k_outer, x_inner, y_inner, k_inner = block_axes
+    
+    for stage in s.stages:
+        if isinstance(stage.op, tvm.te.ComputeOp):
+            if stage.op.name == 'A_shared':
+                axes = s[stage].op.axis
+                if len(axes) >= 2:
+                    fused = s[stage].fuse(*axes)
+                    outer, inner = s[stage].split(fused, factor=4)
+                    s[stage].vectorize(inner)
+                
+            elif stage.op.name == 'B_shared':
+                axes = s[stage].op.axis
+                if len(axes) >= 2:
+                    fused = s[stage].fuse(*axes)
+                    outer, inner = s[stage].split(fused, factor=4)
+                    s[stage].vectorize(inner)
+    
+    s[C].unroll(k_inner)
+    return s
 
 
 def make_dwsp_conv2d_gpu_scheduler(B, C, H, W, K):
