@@ -1,3 +1,7 @@
+This project explores the use of the TVM compiler to optimize deep learning operations across CPU and GPU hardware backends. Developed as part of the [**ECE 5545**](https://abdelfattah-class.github.io/ece5545/): _Machine Learning Hardware and Systems_ course at Cornell Tech, the assignment focuses on low-level performance tuning of key DNN primitives—including 1D convolution, GEMM, and depthwise separable convolution. For each primitive, we implemented multiple hand-crafted schedule optimizations using TVM's low-level APIs to achieve significant runtime improvements.
+
+---
+
 ### ECE 5545 Machine Learning Hardware and Systems
 
 # Assignment 3: Compiling DNNs with TVM
@@ -10,7 +14,7 @@ Assigned on: Wednesday March 12th
 Total marks = 16/100    
 (-2 marks per day late)
 
-----
+
 
 <p align="center">
   <img src= "https://tvm.apache.org/images/main/tvm-stack.png" height="300" class="center" />
